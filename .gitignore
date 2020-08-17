@@ -2,3 +2,6 @@ config.json
 images/items
 node_modules/*
 !node_modules/node-albion-api
+database.sqlite
+
+.vscode/
