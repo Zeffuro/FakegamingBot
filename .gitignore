@@ -1,2 +1,4 @@
 config.json
-/images/items
+images/items
+node_modules/*
+!node_modules/node-albion-api
