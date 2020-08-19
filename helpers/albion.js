@@ -9,6 +9,7 @@ const Sequelize = require("sequelize");
 module.exports = {
     handleKillDeathCommand: handleKillDeathCommand,
     handleEventCommand: handleEventCommand,
+    handleTrackCommand: handleTrackCommand,
     scanRecentEvents: scanRecentEvents
 };
 
@@ -317,40 +318,52 @@ async function getEventData (eventId){
     return await Promise.resolve(albion.event(eventId));
 }
 
-async function getPlayerInfo (player, database){
-    let playerInfo = await database.Albion.Player.findOne({
+async function getEntityInfo (name, type, database){
+    let entityInfo = await database.Albion.Entity.findOne({
         where: { 
             name: {
-                [Sequelize.Op.like]: player
+                [Sequelize.Op.like]: name
             }
         },
         raw: true
     });
     
-    if(!playerInfo){
-        let searchResults = await Promise.resolve(albion.search(player));
-        let foundPlayer = searchResults.players.find(x => x.Name == player);
+    if(!entityInfo){
+        let foundEntity;
+        let searchResults = await Promise.resolve(albion.search(name));
+        switch(type){
+        case 0:     // Player
+            foundEntity = searchResults.players.find(x => x.Name == name);
+            break;
+        case 1:     // Guild
+            foundEntity = searchResults.guilds.find(x => x.Name == name);
+            break;
+        case 2:     // Alliance
+            foundEntity = searchResults.guilds.find(x => x.Name == name);
+            break;
+        default:    // Invalid type
+            break;
+        }
 
-        if(foundPlayer !== undefined){
-            await database.Albion.Player.create({
-                id: foundPlayer.Id,
-                name: foundPlayer.Name,
-                guildId: foundPlayer.GuildId,
-                guildName: foundPlayer.GuildName,
-                allianceId: foundPlayer.AllianceId,
-                allianceName: foundPlayer.AllianceName,
+        if(foundEntity !== undefined){
+            await database.Albion.Entity.create({
+                id: foundEntity.Id,
+                name: foundEntity.Name,
+                type: type
             });
-            playerInfo = await database.Albion.Player.findOne({
+
+            entityInfo = await database.Albion.Entity.findOne({
                 where: { 
                     name: {
-                        [Sequelize.Op.like]: player
+                        [Sequelize.Op.like]: name
                     }
                 },
                 raw: true
             });
         }
     }
-    return playerInfo;
+
+    return entityInfo;
 }
 
 async function getOrSaveItemImage(item){
@@ -393,15 +406,12 @@ async function handleKillDeathCommand(command, message, args, database) {
 
     let loadingMessage = await message.channel.send("Retrieving data from Albion Online API, sometimes this can take a very long time.");
     if(args.length === 0){
-        playerInfo = await database.Albion.Player.findOne({
-            where: { discordId: message.author.id },
-            raw: true
-        });
-        if(!playerInfo) return loadingMessage.edit(`No Albion Account linked to your Discord, please use \`!${command} <name>\` or link your account to Discord. ${message.author}`);
+        playerInfo = await getEntityInfo(message.author.username, 0, database);
+        if(!playerInfo) return loadingMessage.edit(`Player not found, please use \`!${command} <name>\` or change your username to your charactername. ${message.author}`);
     }
 
     if(!playerInfo){
-        playerInfo = await getPlayerInfo(player, database);
+        playerInfo = await getEntityInfo(player, 0, database);
     }
 
     if(!playerInfo){
@@ -429,81 +439,129 @@ async function handleKillDeathCommand(command, message, args, database) {
     handleEventData(event[0], message.channel, loadingMessage);    
 }
 
-async function scanRecentEvents (database, client){
-    let infoArray = await database.Albion.Info.findAll({
-        raw: true
-    });
+async function handleTrackCommand(message, args, database, remove = false){
+    if(args.length < 2){
+        return message.channel.send("Not enough arguments provided.");
+    }
+    
+    let type;
+    switch(args[0]){
+    case "player":
+        type = 0;
+        break;
+    case "guild":
+        type = 1;
+        break;
+    default:
+        return message.channel.send("No valid type provided, valid types are: player, guild.");
+    }
+    let entity = args.slice(1).join(" ");
+    let entityInfo;
 
-    let players = await database.Albion.Player.findAll({
-        where: { 
-            [Sequelize.Op.or]: [
-                {trackKills: true},
-                {trackDeaths: true}
-            ] 
+    entityInfo = await getEntityInfo(entity, type, database);
+    if(!entityInfo){
+        return message.channel.send(`The ${args[0]} ${entity} doesn't seem to exist!`);
+    }
+
+    let trackEntry = await database.Albion.ServerTrack.findAll({
+        where: {
+            serverId: await message.guild.id,
+            entityId: entityInfo.id
         },
         raw: true
     });
 
-    for (const player of players) {
-        if(infoArray.filter(x => x.guildId === player.guildId).length === 0){
-            await database.Albion.Info.create({
-                guildId: player.guildId,
-                lastEventId: 0
-            });
-            infoArray = await database.Albion.Info.findAll({
-                raw: true
-            });
-        }
+    if(trackEntry.length === 1 && !remove){
+        return message.channel.send(`The ${args[0]} ${entity} is already being tracked!`);
+    }
+    if(trackEntry.length === 0 && remove){        
+        return message.channel.send(`The ${args[0]} ${entity} is not being tracked!`);
     }
 
-    for (const info of infoArray) {
-        let events = [];
-        let page = 0;
-        let doOnePage = info.lastEventId === "0";
-        let processNextPage = true;
-
-        do {
-            console.log(`Getting page ${page} for guildId: ${info.guildId}`);
-            let newEvents = await albion.events(page, info.guildId);
-            events = events.concat(newEvents);
-            console.log(`Last eventId on page: ${newEvents[newEvents.length - 1].EventId} - Last eventId database: ${info.lastEventId}`);
-            page++;
-            if(doOnePage){
-                break;
+    if(!remove){
+        await database.Albion.ServerTrack.create({
+            serverId: await message.guild.id,
+            entityId: entityInfo.id,
+            channelId: message.channel.id
+        });
+    }else{
+        await database.Albion.ServerTrack.destroy({
+            where: {
+                serverId: await message.guild.id,
+                entityId: entityInfo.id
             }
-            processNextPage = events.filter(x => x.EventId <= info.lastEventId).length === 0 && page !== 20;
-        }
-        while(processNextPage);
-
-        await database.Albion.Info.update(
-            {
-                lastEventId: events[0].EventId
-            },
-            {
-                where: {
-                    guildId: info.guildId
-                }
-            }
-        );
-
-        for (const event of events) {
-            if(event.EventId <= info.lastEventId){
-                break;
-            }
-            for (const player of players) {
-                if(player.trackKills === 1 && event.Killer.Id == player.id){
-                    console.log(`Found kill for ${player.name}.`);
-                    handleEventData(event, client.channels.cache.get(info.channelId));
-                }
-                if(player.trackDeaths === 1 && event.Victim.Id == player.id){
-                    console.log(`Found death for ${player.name}.`);
-                    handleEventData(event, client.channels.cache.get(info.channelId));
-                }
-            }
-        }
-        console.log(`Done scanning for guildId: ${info.guildId} - New last eventId: ${events[0].EventId}`);
+        });
     }
-    console.log("Done scanning for all guilds.");
+
+    return message.channel.send(`Tracking for ${args[0]} ${entity} now ${remove ? "removed" : "added"}!`);
+}
+
+async function scanRecentEvents (database, client){
+    let trackEntries = await database.Albion.ServerTrack.findAll({
+        include: [{model: database.Albion.Entity}],
+        raw: true
+    });
+
+    let info = await database.Albion.Static.findOne({
+        where: { 
+            id: 1
+        },
+        raw: true
+    });
+
+    let events = [];
+    let page = 0;
+    let doOnePage = info.lastEventId === "0";
+    let processNextPage = true;
+
+    do {
+        console.log(`Getting events page ${page}`);
+        let newEvents = await albion.events(page);
+        events = events.concat(newEvents);
+        console.log(`Last eventId on page: ${newEvents[newEvents.length - 1].EventId} - Last eventId database: ${info.lastEventId}`);
+        page++;
+        if(doOnePage){
+            break;
+        }
+        processNextPage = events.filter(x => x.EventId <= info.lastEventId).length === 0 && page !== 20;
+    }
+    while(processNextPage);
+
+    await database.Albion.Static.update(
+        {
+            lastEventId: events[0].EventId
+        },
+        {
+            where: {
+                id: 1
+            }
+        }
+    );
+
+    for (const event of events) {
+        if(event.EventId <= info.lastEventId){
+            break;
+        }
+        for (const trackEntry of trackEntries) {
+            switch(trackEntry["entity.type"]){
+            case 0:     // Player
+                if((event.Killer.Id == trackEntry.id && trackEntry.trackEvents) || (event.Victim.Id == trackEntry.id && trackEntry.trackEvents)){
+                    console.log(`Found event for ${trackEntry["entity.name"]}.`);
+                    handleEventData(event, client.channels.cache.get(info.channelId));
+                }
+                break;
+            case 1:     // Guild
+                if((event.Killer.GuildId == trackEntry.id && trackEntry.trackEvents) || (event.Victim.GuildId == trackEntry.id && trackEntry.trackEvents)){
+                    console.log(`Found event for ${trackEntry["entity.name"]}.`);
+                    handleEventData(event, client.channels.cache.get(info.channelId));
+                }
+                break;
+            default:    // Invalid
+                break;
+            }
+        }
+    }
+    console.log("Scan done.");
 }
 
 async function downloadImage (url, path) {

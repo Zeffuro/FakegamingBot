@@ -1,10 +1,9 @@
 module.exports = (sequelize, type) => {
-    return sequelize.define("info", {
-        guildId: {
+    return sequelize.define("static", {
+        id: {
             type: type.STRING,
             primaryKey: true
         },
-        channelId: type.STRING,
         lastEventId: type.STRING
     });
 };

@@ -1,7 +1,8 @@
-
 const Sequelize = require("sequelize");
-const PlayerModel = require("./models/albion/player");
-const InfoModel = require("./models/albion/info");
+const EntityModel = require("./models/albion/entity");
+const StaticModel = require("./models/albion/static");
+const ServerTrackModel = require("./models/albion/servertrack");
+const ServerModel = require("./models/server");
 
 const sequelize = new Sequelize("database", "user", "password", {
     host: "localhost",
@@ -11,8 +12,13 @@ const sequelize = new Sequelize("database", "user", "password", {
     storage: "database.sqlite",
 });
 
-const Player = PlayerModel(sequelize, Sequelize);
-const Info = InfoModel(sequelize, Sequelize);
+const Entity = EntityModel(sequelize, Sequelize);
+const Server = ServerModel(sequelize, Sequelize);
+const ServerTrack = ServerTrackModel(sequelize, Sequelize);
+const Static = StaticModel(sequelize, Sequelize);
+
+Entity.hasMany(ServerTrack);
+ServerTrack.belongsTo(Entity);
 
 sequelize.sync({force: false})
     .then(() => {
@@ -21,9 +27,11 @@ sequelize.sync({force: false})
 
 module.exports = {
     Database: {
+        Server,
         Albion: {        
-            Player,
-            Info
+            Entity,
+            ServerTrack,
+            Static
         }
     }    
 };

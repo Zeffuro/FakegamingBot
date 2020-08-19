@@ -3,7 +3,7 @@ const Discord = require("discord.js");
 const ReadDir = require("fs-readdir-recursive");
 const Readline = require("readline");
 const { Database } = require("./sequelize");
-const { prefix, token, defaultCooldown } = require("./config.json");
+const { token, defaultCooldown } = require("./config.json");
 const albion = require("./helpers/albion");
 
 const client = new Discord.Client();
@@ -31,13 +31,34 @@ rl.on("line", function(line){
 
 client.once("ready", () => {
     console.log("Ready!");
-    Cron.schedule("*/15 * * * *", () => {
+    Cron.schedule("*/1 * * * *", () => {
         console.log("Running scheduled scan of Albion events.");
         albion.scanRecentEvents(Database, client);
     });
 });
 
-client.on("message", message => {
+client.on("message", async message => {
+    let serverInfo;
+    if(message.channel.type !== "dm"){
+        serverInfo = await Database.Server.findOne({
+            where: { serverId: await message.guild.id },
+            raw: true
+        });
+        if(!serverInfo){
+            await Database.Server.create({
+                serverId: await message.guild.id,
+                prefix: "!"
+            });
+            serverInfo = await Database.Server.findOne({
+                where: { serverId: await message.guild.id },
+                raw: true
+            });
+        }
+    }
+
+    let prefix = "!";
+    if(serverInfo) prefix = serverInfo.prefix;
+
     if (!message.content.startsWith(prefix) || message.author.bot) return;
 
     const args = message.content.slice(prefix.length).trim().split(/ +/);
@@ -46,6 +67,10 @@ client.on("message", message => {
     const command = client.commands.get(commandName) || client.commands.find(cmd => cmd.aliases && cmd.aliases.includes(commandName));
 
     if (!command) return;
+
+    if (command.adminOnly && !message.member.hasPermission("ADMINISTRATOR")) {
+        return message.reply("Only Administrator's can use this command!");
+    }
 
     if (command.guildOnly && message.channel.type === "dm") {
         return message.reply("I can't execute that command inside DMs!");

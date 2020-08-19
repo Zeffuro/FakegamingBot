@@ -5,8 +5,9 @@ module.exports = {
     aliases: [],
     database: false,
     cooldown: 5,
-    description: "Retrieves your last Albion Death.",
+    description: "Retrieves information about event.",
     guildOnly: false,
+    adminOnly: false,
     args: true,
     usage: "<eventId>",
     async execute(message, args) {

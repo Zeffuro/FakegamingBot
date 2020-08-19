@@ -5,7 +5,6 @@ Noteable things are you need your bot token and you'll need the changes I made t
 ```json
 {
 	"defaultCooldown": 3,
-	"prefix": "!",
 	"token": "PutDiscordTokenHere"
 }
 ```
