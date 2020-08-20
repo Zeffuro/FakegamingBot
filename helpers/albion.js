@@ -148,9 +148,14 @@ async function createEquipment (equipment) {
     for (const [name, item] of Object.entries(equipment)) {
         if(item !== null){
             let location = equipLocation[name];
-            let imagePath = await getOrSaveItemImage(item);
-            let image = await loadImage(imagePath);
-            context.drawImage(image, location.x, location.y, itemSize, itemSize);
+            
+            try {
+                let imagePath = await getOrSaveItemImage(item);
+                let image = await loadImage(imagePath);
+                context.drawImage(image, location.x, location.y, itemSize, itemSize);
+            } catch(err){
+                console.log(err);
+            }            
 
             context.fillStyle = "#fff";
             context.fillText(item.Count, location.x + 80, location.y + 85);
@@ -514,53 +519,56 @@ async function scanRecentEvents (database, client){
     let page = 0;
     let doOnePage = info.lastEventId === "0";
     let processNextPage = true;
-
-    do {
-        console.log(`Getting events page ${page}`);
-        let newEvents = await albion.events(page);
-        events = events.concat(newEvents);
-        console.log(`Last eventId on page: ${newEvents[newEvents.length - 1].EventId} - Last eventId database: ${info.lastEventId}`);
-        page++;
-        if(doOnePage){
-            break;
-        }
-        processNextPage = events.filter(x => x.EventId <= info.lastEventId).length === 0 && page !== 20;
-    }
-    while(processNextPage);
-
-    await database.Albion.Static.update(
-        {
-            lastEventId: events[0].EventId
-        },
-        {
-            where: {
-                id: 1
-            }
-        }
-    );
-
-    for (const event of events) {
-        if(event.EventId <= info.lastEventId){
-            break;
-        }
-        for (const trackEntry of trackEntries) {
-            switch(trackEntry["entity.type"]){
-            case 0:     // Player
-                if((event.Killer.Id == trackEntry.entityId) || (event.Victim.Id == trackEntry.entityId)){
-                    console.log(`Found event for ${trackEntry["entity.name"]}.`);
-                    handleEventData(event, client.channels.cache.get(trackEntry.channelId));
-                }
-                break;
-            case 1:     // Guild
-                if((event.Killer.GuildId == trackEntry.entityId) || (event.Victim.GuildId == trackEntry.entityId)){
-                    console.log(`Found event for ${trackEntry["entity.name"]}.`);
-                    handleEventData(event, client.channels.cache.get(trackEntry.channelId));
-                }
-                break;
-            default:    // Invalid
+    try{
+        do {
+            console.log(`Getting events page ${page}`);
+            let newEvents = await albion.events(page);
+            events = events.concat(newEvents);
+            console.log(`Last eventId on page: ${newEvents[newEvents.length - 1].EventId} - Last eventId database: ${info.lastEventId}`);
+            page++;
+            if(doOnePage){
                 break;
             }
+            processNextPage = events.filter(x => x.EventId <= info.lastEventId).length === 0 && page !== 20;
         }
+        while(processNextPage);
+
+        await database.Albion.Static.update(
+            {
+                lastEventId: events[0].EventId
+            },
+            {
+                where: {
+                    id: 1
+                }
+            }
+        );
+
+        for (const event of events) {
+            if(event.EventId <= info.lastEventId){
+                break;
+            }
+            for (const trackEntry of trackEntries) {
+                switch(trackEntry["entity.type"]){
+                case 0:     // Player
+                    if((event.Killer.Id == trackEntry.entityId) || (event.Victim.Id == trackEntry.entityId)){
+                        console.log(`Found event for ${trackEntry["entity.name"]}.`);
+                        handleEventData(event, client.channels.cache.get(trackEntry.channelId));
+                    }
+                    break;
+                case 1:     // Guild
+                    if((event.Killer.GuildId == trackEntry.entityId) || (event.Victim.GuildId == trackEntry.entityId)){
+                        console.log(`Found event for ${trackEntry["entity.name"]}.`);
+                        handleEventData(event, client.channels.cache.get(trackEntry.channelId));
+                    }
+                    break;
+                default:    // Invalid
+                    break;
+                }
+            }
+        }
+    } catch(err){
+        console.log(err);
     }
     console.log("Scan done.");
 }
