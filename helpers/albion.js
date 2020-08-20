@@ -99,7 +99,8 @@ async function createEmbed (battle) {
         .setTitle(`${battle.Killer.Name} has killed ${battle.Victim.Name}`)
         .attachFiles(mainAttach)
         .setImage("attachment://main.png")
-        .setURL(`https://albiononline.com/en/killboard/kill/${battle.EventId}`);
+        .setURL(`https://albiononline.com/en/killboard/kill/${battle.EventId}`)
+        .setFooter("Contact me on Discord (Zeffuro#3033) for any questions.");
 
     let inventoryArray = Object.values(battle.Victim.Inventory).filter(x => x !== null);
     let inventoryEmbed;
@@ -158,7 +159,7 @@ async function createEquipment (equipment) {
         }
     }
 
-    createEstimatedPricesImage(itemList, context, 0, 440);
+    if(itemList.length > 0) createEstimatedPricesImage(itemList, context, 0, 440);
 
     return canvas.toBuffer();
 }
@@ -545,15 +546,15 @@ async function scanRecentEvents (database, client){
         for (const trackEntry of trackEntries) {
             switch(trackEntry["entity.type"]){
             case 0:     // Player
-                if((event.Killer.Id == trackEntry.id && trackEntry.trackEvents) || (event.Victim.Id == trackEntry.id && trackEntry.trackEvents)){
+                if((event.Killer.Id == trackEntry.entityId) || (event.Victim.Id == trackEntry.entityId)){
                     console.log(`Found event for ${trackEntry["entity.name"]}.`);
-                    handleEventData(event, client.channels.cache.get(info.channelId));
+                    handleEventData(event, client.channels.cache.get(trackEntry.channelId));
                 }
                 break;
             case 1:     // Guild
-                if((event.Killer.GuildId == trackEntry.id && trackEntry.trackEvents) || (event.Victim.GuildId == trackEntry.id && trackEntry.trackEvents)){
+                if((event.Killer.GuildId == trackEntry.entityId) || (event.Victim.GuildId == trackEntry.entityId)){
                     console.log(`Found event for ${trackEntry["entity.name"]}.`);
-                    handleEventData(event, client.channels.cache.get(info.channelId));
+                    handleEventData(event, client.channels.cache.get(trackEntry.channelId));
                 }
                 break;
             default:    // Invalid
