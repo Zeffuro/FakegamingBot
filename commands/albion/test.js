@@ -1,15 +1,15 @@
 const albion = require("../../helpers/albion");
 
 module.exports = {
-    name: "lastkill",
+    name: "test",
     aliases: [],
     database: true,
     cooldown: 5,
-    description: "Retrieves your last Albion Kill.",
+    description: "Test command.",
     guildOnly: false,
     adminOnly: false,
-    args: false,
-    usage: "<name>",
+    args: true,
+    usage: "",
     async execute(message, args, database) {
         await albion.handleKillDeathCommand(this.name, message, args, database);
     },

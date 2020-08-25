@@ -11,6 +11,6 @@ module.exports = {
     args: false,
     usage: "<name>",
     async execute(message, args, database) {
-        await albion.handleKillDeathCommand("lastdeath", message, args, database);
+        await albion.handleKillDeathCommand(this.name, message, args, database);
     },
 };

@@ -1,11 +1,11 @@
 const albion = require("../../helpers/albion");
 
 module.exports = {
-    name: "lastkill",
+    name: "last10kills",
     aliases: [],
     database: true,
     cooldown: 5,
-    description: "Retrieves your last Albion Kill.",
+    description: "Retrieves your last Albion Death.",
     guildOnly: false,
     adminOnly: false,
     args: false,

@@ -7,8 +7,9 @@ const moment = require("moment");
 const Sequelize = require("sequelize");
 
 module.exports = {
-    handleKillDeathCommand: handleKillDeathCommand,
+    handleBuildCommand: handleBuildCommand,
     handleEventCommand: handleEventCommand,
+    handleKillDeathCommand: handleKillDeathCommand,
     handleTrackCommand: handleTrackCommand,
     scanRecentEvents: scanRecentEvents
 };
@@ -79,13 +80,108 @@ async function createFightImage (battle){
         context.fillStyle = player.Type === "Damage" ? "#ff4e4e" : "#88ff00";
         let currentPlayerName = player.Name;
         let actionLine = `${currentPlayerName}: ${Math.floor(player.Value)}`;
-        do {
+
+        while(context.measureText(actionLine).width > 190){
             currentPlayerName = currentPlayerName.slice(0, -1);
             actionLine = `${currentPlayerName}: ${Math.floor(player.Value)}`;
         }
-        while(context.measureText(actionLine).width > 190);
         
         context.fillText(actionLine, 400, y);
+    }
+
+    return canvas.toBuffer("image/png", { compressionLevel: 1, filters: canvas.PNG_FILTER_NONE });
+}
+
+async function createMiniFight (battle){
+    const width = 800;
+    const height = 100;
+    
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+
+    context.imageSmoothingQuality = "high";
+    context.font = "14px \"Sansation Bold\"";
+
+    context.fillStyle = "#fff";
+    context.textAlign = "center";
+
+    let killerEquip = new Image();
+    let victimEquip = new Image();
+
+    let guildString = battle.Killer.AllianceName !== "" ? `[${battle.Killer.AllianceName}] ${battle.Killer.GuildName}` : battle.Killer.GuildName;
+
+    context.fillText(guildString, 150, 15);
+    context.fillText(battle.Killer.Name, 150, 35);
+
+    killerEquip.onload = () => context.drawImage(killerEquip, 0, 40);
+    killerEquip.src = await createMiniEquipment(battle.Killer.Equipment);
+
+    guildString = battle.Victim.AllianceName !== "" ? `[${battle.Victim.AllianceName}] ${battle.Victim.GuildName}` : battle.Victim.GuildName;
+    context.fillText(guildString, 650, 15);
+    context.fillText(battle.Victim.Name, 650, 35);
+
+    victimEquip.onload = () => context.drawImage(victimEquip, 500, 40);
+    victimEquip.src = await createMiniEquipment(battle.Victim.Equipment);
+
+    context.fillStyle = "#ff4e4e";
+    context.textAlign = "right";
+    context.fillText(Math.floor(battle.Killer.AverageItemPower), 350, 75);
+    context.textAlign = "left";
+    context.fillText(Math.floor(battle.Victim.AverageItemPower), 450, 75);
+
+    let powerDifference = battle.Killer.AverageItemPower - battle.Victim.AverageItemPower;
+    
+    context.fillStyle = Math.sign(powerDifference) <= 0 ? "#ffff00" : "#88ff00";
+    context.textAlign = "center";
+    context.fillText(`${Math.sign(powerDifference) <= 0 ? "" : "+"}${Math.floor(powerDifference)}`, 400, 75);
+
+    context.fillStyle = "#fff";
+
+    let fameString = battle.TotalVictimKillFame.toLocaleString();
+    let fameWidth = context.measureText(fameString);
+    let fameIconLocationX = (400 - Math.floor((fameWidth.width) / 2)) - 24;
+    let fameIconLocationY = 40;
+    let fameImage = await loadImage("images/FAME.png");
+
+    context.drawImage(fameImage, fameIconLocationX, fameIconLocationY - 16, 20, 20);
+    context.fillText(fameString, 400, fameIconLocationY);
+
+    return canvas.toBuffer();
+}
+
+async function createMiniFightCollection (eventData){
+    const width = 800;
+    const height = 1000;
+
+    registerFont("fonts/sansation_regular.ttf", { family: "Sansation" });
+    registerFont("fonts/sansation_bold.ttf", { family: "Sansation Bold" });
+
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+
+    context.imageSmoothingQuality = "high";
+    context.font = "14px \"Sansation Bold\"";
+
+    context.fillStyle = "#2f3136";
+    context.fillRect(0, 0, width, height);
+
+    context.fillStyle = "#fff";
+    context.textAlign = "center";
+
+    let currentX = 0;
+    let currentY = 0;
+
+    let image = new Image();
+
+    for (const battle of eventData) {
+        image.onload = () => context.drawImage(image, currentX, currentY);
+        image.src = await createMiniFight(battle);
+
+        currentX = 0;
+        currentY += 100;
+
+        context.fillStyle = "#17181b";
+        context.fillRect(0, currentY - 4, width, 2);
     }
 
     return canvas.toBuffer("image/png", { compressionLevel: 1, filters: canvas.PNG_FILTER_NONE });
@@ -119,6 +215,22 @@ async function createEmbed (battle) {
     };
 }
 
+async function createMiniEmbed (eventData) {
+    let image = await createMiniFightCollection(eventData);
+    //let image = await createMiniEquipment(eventData[0].Killer.Equipment);
+ 
+    let mainAttach = new Discord.MessageAttachment(image, "main.png");
+    let mainEmbed = new Discord.MessageEmbed()
+        .attachFiles(mainAttach)
+        .setImage("attachment://main.png")
+        .setFooter("Contact me on Discord (Zeffuro#3033) for any questions.");
+
+    return {
+        main: mainEmbed,
+        inventory: undefined
+    };
+}
+
 async function createEquipment (equipment) {
     const width = 300;
     const height = 560;
@@ -148,12 +260,13 @@ async function createEquipment (equipment) {
     for (const [name, item] of Object.entries(equipment)) {
         if(item !== null){
             let location = equipLocation[name];
-            
+            let imagePath = "";
             try {
-                let imagePath = await getOrSaveItemImage(item);
+                imagePath = await getOrSaveItemImage(item);
                 let image = await loadImage(imagePath);
                 context.drawImage(image, location.x, location.y, itemSize, itemSize);
             } catch(err){
+                console.log(imagePath);
                 console.log(err);
             }            
 
@@ -164,7 +277,55 @@ async function createEquipment (equipment) {
         }
     }
 
-    if(itemList.length > 0) createEstimatedPricesImage(itemList, context, 0, 440);
+    if(Object.entries(itemList).length === 0){
+        let naked = await loadImage("images/NAKED.png");
+        context.drawImage(naked, 0, -100, width, height);
+    }else{
+        createEstimatedPricesImage(itemList, context, 0, 440);
+    }
+
+    return canvas.toBuffer();
+}
+
+async function createMiniEquipment (equipment) {
+    const width = 300;
+    const height = 60;
+    const itemSize = 55;
+
+    registerFont("fonts/sansation_regular.ttf", { family: "Sansation" });
+    registerFont("fonts/sansation_bold.ttf", { family: "Sansation Bold" });
+
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+    context.font = "14px \"Sansation\"";
+
+    let equipLocation = {
+        Bag: { x: -100, y: -100 },
+        Head: { x: 50, y: 0 },
+        Cape: { x: 200, y: 0 },
+        MainHand: { x: 0, y: 0 },
+        Armor: { x: 100, y: 0 },
+        OffHand: { x: 250, y: 0 },
+        Food: { x: -100, y: -100 },
+        Shoes: { x: 150, y: 0 },
+        Potion: { x: -100, y: -100 },
+        Mount: { x: -100, y: -100 },
+    };
+
+    for (const [name, item] of Object.entries(equipment)) {
+        if(item !== null){
+            let location = equipLocation[name];
+            let imagePath = "";
+            try {
+                imagePath = await getOrSaveItemImage(item);
+                let image = await loadImage(imagePath);
+                context.drawImage(image, location.x, location.y, itemSize, itemSize);
+            } catch(err){
+                console.log(imagePath);
+                console.log(err);
+            }
+        }
+    }
 
     return canvas.toBuffer();
 }
@@ -313,15 +474,27 @@ async function getItemMarketPrices(itemType){
 }
 
 async function getPlayerKills (player){
-    return await Promise.resolve(albion.kills(player.id));
+    try{
+        return await Promise.resolve(albion.kills(player.id));
+    }catch(err){
+        console.log(err);
+    }
 }
 
 async function getPlayerDeaths (player){
-    return await Promise.resolve(albion.deaths(player.id));
+    try{
+        return await Promise.resolve(albion.deaths(player.id));
+    }catch(err){
+        console.log(err);
+    }
 }
 
 async function getEventData (eventId){
-    return await Promise.resolve(albion.event(eventId));
+    try{
+        return await Promise.resolve(albion.event(eventId));
+    }catch(err){
+        console.log(err);
+    }
 }
 
 async function getEntityInfo (name, type, database){
@@ -381,6 +554,10 @@ async function getOrSaveItemImage(item){
     return imageItemPath;
 }
 
+async function handleBuildCommand(message, args, database) {
+
+}
+
 async function handleEventCommand(message, args) {
     let loadingMessage = await message.channel.send("Retrieving data from Albion Online API, sometimes this can take a very long time.");
     let eventId = args[0];
@@ -393,8 +570,13 @@ async function handleEventCommand(message, args) {
     handleEventData(event, message.channel, loadingMessage);
 }
 
-async function handleEventData(event, channel, loadingMessage){    
-    let embed = await createEmbed(event);
+async function handleEventData(eventData, channel, loadingMessage, mini = false){
+    let embed;
+    if(mini){
+        embed = await createMiniEmbed(eventData);
+    }else{
+        embed = await createEmbed(eventData);
+    }
 
     if(loadingMessage){
         loadingMessage.delete();
@@ -406,11 +588,10 @@ async function handleEventData(event, channel, loadingMessage){
     }
 }
 
-async function handleKillDeathCommand(command, message, args, database) {
+async function handlePlayerArguments(command, loadingMessage, message, args, database){
     let player = args[0];
     let playerInfo;
 
-    let loadingMessage = await message.channel.send("Retrieving data from Albion Online API, sometimes this can take a very long time.");
     if(args.length === 0){
         playerInfo = await getEntityInfo(message.author.username, 0, database);
         if(!playerInfo) return loadingMessage.edit(`Player not found, please use \`!${command} <name>\` or change your username to your charactername. ${message.author}`);
@@ -426,23 +607,46 @@ async function handleKillDeathCommand(command, message, args, database) {
 
     await loadingMessage.edit(`Found player, now retrieving ${command} data from Albion Online API, sometimes this can take a very long time.`);
 
+    return playerInfo;
+}
+
+async function handleKillDeathCommand(command, message, args, database) {
+    let loadingMessage = await message.channel.send("Retrieving data from Albion Online API, sometimes this can take a very long time.");
+    let playerInfo = await handlePlayerArguments(command, loadingMessage, message, args, database);
+
     let event;
     switch(command){
     case "lastkill":
         event = await getPlayerKills(playerInfo);
+        if(event.length === 0){
+            return loadingMessage.edit(`${playerInfo.Name} has no kills, this is probably a new player or a scout...`);
+        }
+        handleEventData(event[0], message.channel, loadingMessage);
         break;
     case "lastdeath":
         event = await getPlayerDeaths(playerInfo);
+        if(event.length === 0){
+            return loadingMessage.edit(`${playerInfo.Name} has no deaths, this man is probably a god!`);
+        }
+        handleEventData(event[0], message.channel, loadingMessage);
+        break;
+    case "last10kills":
+        event = await getPlayerKills(playerInfo);
+        if(event.length === 0){
+            return loadingMessage.edit(`${playerInfo.Name} has no kills, this is probably a new player or a scout...`);
+        }
+        handleEventData(event, message.channel, loadingMessage, true);
+        break;
+    case "last10deaths":
+        event = await getPlayerDeaths(playerInfo);
+        if(event.length === 0){
+            return loadingMessage.edit(`${playerInfo.Name} has no deaths, this man is probably a god!`);
+        }
+        handleEventData(event, message.channel, loadingMessage, true);
         break;
     default:
         break;
     }
-
-    if(event.length === 0){
-        return loadingMessage.edit(`${player} has no kills, this is probably a new player or a scout...`);
-    }
-
-    handleEventData(event[0], message.channel, loadingMessage);    
 }
 
 async function handleTrackCommand(message, args, database, remove = false){
