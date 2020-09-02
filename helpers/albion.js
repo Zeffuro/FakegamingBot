@@ -1,10 +1,23 @@
 const albion = require("node-albion-api");
 const axios = require("axios");
 const { registerFont, createCanvas, loadImage, Image } = require("canvas");
+const { transports, format, createLogger } = require("winston");
 const Discord = require("discord.js");
 const fs = require("fs");
 const moment = require("moment");
 const Sequelize = require("sequelize");
+
+const logger = createLogger({
+    level: "info",
+    format: format.combine(
+        format.timestamp(),
+        format.colorize(),
+        format.printf(info => `[${info.timestamp}] ${info.level}: ${info.message}`)
+    ),
+    transports: [
+        new transports.Console()
+    ]
+});
 
 module.exports = {
     handleBuildCommand: handleBuildCommand,
@@ -256,7 +269,7 @@ async function createEquipment (equipment) {
         Mount: { x: 100, y: 300 },
     };
 
-    let itemList = {};
+    let itemList = [];
     for (const [name, item] of Object.entries(equipment)) {
         if(item !== null){
             let location = equipLocation[name];
@@ -266,22 +279,28 @@ async function createEquipment (equipment) {
                 let image = await loadImage(imagePath);
                 context.drawImage(image, location.x, location.y, itemSize, itemSize);
             } catch(err){
-                console.log(imagePath);
-                console.log(err);
+                logger.error(imagePath);
+                logger.error(err);
             }            
 
             context.fillStyle = "#fff";
             context.fillText(item.Count, location.x + 80, location.y + 85);
-            let itemMarket = await getItemMarketPrices(item.Type);
-            itemList[item.Type] = itemMarket;
-        }
-    }
 
-    if(Object.entries(itemList).length === 0){
+            itemList.push(
+                {
+                    name: item.Type,
+                    quality: item.Quality,
+                    amount: item.Count
+                }
+            );
+        }
+    }    
+
+    if(itemList.length === 0){
         let naked = await loadImage("images/NAKED.png");
         context.drawImage(naked, 0, -100, width, height);
     }else{
-        createEstimatedPricesImage(itemList, context, 0, 440);
+        await createEstimatedPricesImage(itemList, context, 0, 440);
     }
 
     return canvas.toBuffer();
@@ -321,8 +340,8 @@ async function createMiniEquipment (equipment) {
                 let image = await loadImage(imagePath);
                 context.drawImage(image, location.x, location.y, itemSize, itemSize);
             } catch(err){
-                console.log(imagePath);
-                console.log(err);
+                logger.error(imagePath);
+                logger.error(err);
             }
         }
     }
@@ -356,9 +375,9 @@ async function createInventory (inventory) {
     context.textAlign = "center";
 
     let j = 0;
-    let itemList = {};
+    let itemList = [];
     for (let i = 0; i < inventoryArray.length; i++) {
-        const item = inventoryArray[i];
+        let item = inventoryArray[i];
         let imagePath = await getOrSaveItemImage(item);
         let image = await loadImage(imagePath);
         
@@ -371,30 +390,43 @@ async function createInventory (inventory) {
             currentX = 0;
             currentY += spacing;
         }
-        let itemMarket = await getItemMarketPrices(item.Type);
-        itemList[item.Type] = itemMarket;
+
+        itemList.push(
+            {
+                name: item.Type,
+                quality: item.Quality,
+                amount: item.Count
+            }
+        );
     }
     currentX = 0;
     currentY += 120;
 
     context.textAlign = "left";
 
-    createEstimatedPricesImage(itemList, context, currentX, currentY);
+    await createEstimatedPricesImage(itemList, context, currentX, currentY);
 
     return canvas.toBuffer();
 }
 
-function createEstimatedPricesImage(itemList, context, x, y) {
-    let itemPrices = {};
-    for (const market of Object.values(itemList)) {
-        for (const location of market) {
-            let price = location.data[location.data.length - 1].avg_price;
-            if(itemPrices[location.location] === undefined){
-                itemPrices[location.location] = price;
-            }else{
-                itemPrices[location.location] += price;
+async function createEstimatedPricesImage(itemList, context, x, y) {
+    let locations = ["Bridgewatch", "Caerleon", "Fort Sterling", "Lymhurst", "Martlock"];
+    let itemTypeList = itemList.map(function(item) {
+        return item.name;
+    });
+    let itemPrices = await getItemMarketPrices(itemTypeList.toString());
+    let itemLocationPrices = [];
+    for (let location of locations) {
+        itemLocationPrices[location] = 0;
+    }
+    for (let item of itemList) {        
+        for (let location of locations) {
+            let itemPrice = itemPrices.find(x => x.quality == item.quality && x.item_id == item.name && x.city == location);
+            if(itemPrice !== undefined){
+                itemLocationPrices[location] += (item.amount * itemPrice.sell_price_min);
             }
         }
+
     }
 
     let currentX = x;
@@ -403,7 +435,7 @@ function createEstimatedPricesImage(itemList, context, x, y) {
     context.fillText("Est. Market Value", currentX, currentY);
     currentY += 20;
     let drawPrice = false;
-    for (const [location, price] of Object.entries(itemPrices)) {
+    for (const [location, price] of Object.entries(itemLocationPrices)) {
         switch(location){
         case "Bridgewatch":     // Yellow
             context.fillStyle = "#ffff00";
@@ -468,8 +500,9 @@ function getUsefulPlayerActions(battle) {
     return usefulPlayerActions.slice(0,11);
 }
 
-async function getItemMarketPrices(itemType){
-    let response = await axios.get(`https://www.albion-online-data.com/api/v2/stats/history/${itemType}?time-scale=24`);
+async function getItemMarketPrices(itemList){
+    //let response = await axios.get(`https://www.albion-online-data.com/api/v2/stats/history/${itemType}?time-scale=24`);
+    let response = await axios.get(`https://www.albion-online-data.com/api/v2/stats/Prices/${itemList}`);
     return response.data; 
 }
 
@@ -477,7 +510,7 @@ async function getPlayerKills (player){
     try{
         return await Promise.resolve(albion.kills(player.id));
     }catch(err){
-        console.log(err);
+        logger.error(err);
     }
 }
 
@@ -485,7 +518,7 @@ async function getPlayerDeaths (player){
     try{
         return await Promise.resolve(albion.deaths(player.id));
     }catch(err){
-        console.log(err);
+        logger.error(err);
     }
 }
 
@@ -493,7 +526,7 @@ async function getEventData (eventId){
     try{
         return await Promise.resolve(albion.event(eventId));
     }catch(err){
-        console.log(err);
+        logger.error(err);
     }
 }
 
@@ -707,6 +740,8 @@ async function handleTrackCommand(message, args, database, remove = false){
 }
 
 async function scanRecentEvents (database, client){
+    logger.info("Running scheduled scan of Albion events.");
+
     let trackEntries = await database.Albion.ServerTrack.findAll({
         include: [{model: database.Albion.Entity}],
         raw: true
@@ -725,10 +760,10 @@ async function scanRecentEvents (database, client){
     let processNextPage = true;
     try{
         do {
-            console.log(`Getting events page ${page}`);
+            logger.info(`Getting events page ${page}`);
             let newEvents = await albion.events(page);
             events = events.concat(newEvents);
-            console.log(`Last eventId on page: ${newEvents[newEvents.length - 1].EventId} - Last eventId database: ${info.lastEventId}`);
+            logger.info(`Last eventId on page: ${newEvents[newEvents.length - 1].EventId} - Last eventId database: ${info.lastEventId}`);
             page++;
             if(doOnePage){
                 break;
@@ -756,13 +791,13 @@ async function scanRecentEvents (database, client){
                 switch(trackEntry["entity.type"]){
                 case 0:     // Player
                     if((event.Killer.Id == trackEntry.entityId) || (event.Victim.Id == trackEntry.entityId)){
-                        console.log(`Found event for ${trackEntry["entity.name"]}.`);
+                        logger.info(`Found event for ${trackEntry["entity.name"]}.`);
                         handleEventData(event, client.channels.cache.get(trackEntry.channelId));
                     }
                     break;
                 case 1:     // Guild
                     if((event.Killer.GuildId == trackEntry.entityId) || (event.Victim.GuildId == trackEntry.entityId)){
-                        console.log(`Found event for ${trackEntry["entity.name"]}.`);
+                        logger.info(`Found event for ${trackEntry["entity.name"]}.`);
                         handleEventData(event, client.channels.cache.get(trackEntry.channelId));
                     }
                     break;
@@ -772,9 +807,11 @@ async function scanRecentEvents (database, client){
             }
         }
     } catch(err){
-        console.log(err);
+        logger.error(err);
+        Promise.reject();
     }
-    console.log("Scan done.");
+    logger.info("Scan done.");
+    Promise.resolve();
 }
 
 async function downloadImage (url, path) {

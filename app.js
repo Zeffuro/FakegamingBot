@@ -2,13 +2,28 @@ const Cron = require("node-cron");
 const Discord = require("discord.js");
 const ReadDir = require("fs-readdir-recursive");
 const Readline = require("readline");
+const { transports, format, createLogger } = require("winston");
 const { Database } = require("./sequelize");
 const { token, defaultCooldown } = require("./config.json");
 const albion = require("./helpers/albion");
 
+var scanCurrentlyRunning = false;
+
 const client = new Discord.Client();
 client.commands = new Discord.Collection();
 const cooldowns = new Discord.Collection();
+
+const logger = createLogger({
+    level: "info",
+    format: format.combine(
+        format.timestamp(),
+        format.colorize(),
+        format.printf(info => `[${info.timestamp}] ${info.level}: ${info.message}`)
+    ),
+    transports: [
+        new transports.Console()
+    ]
+});
 
 const commandFiles = ReadDir("./commands").filter(file => file.endsWith(".js"));
 
@@ -30,10 +45,17 @@ rl.on("line", function(line){
 });
 
 client.once("ready", () => {
-    console.log("Ready!");
-    Cron.schedule("*/1 * * * *", () => {
-        console.log("Running scheduled scan of Albion events.");
-        albion.scanRecentEvents(Database, client);
+    logger.info("Ready!");
+    Cron.schedule("*/1 * * * *", async () => {
+        if(!scanCurrentlyRunning){
+            scanCurrentlyRunning = true;
+            try {
+                await albion.scanRecentEvents(Database, client);
+            } catch (error) {
+                logger.info("Something went wrong with Albion Events skin.");
+            }
+            scanCurrentlyRunning = false;
+        }
     });
 });
 
@@ -109,7 +131,7 @@ client.on("message", async message => {
         
         command.database ? command.execute(message, args, Database) :  command.execute(message, args);
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         message.reply("There was an error trying to execute that command!");
     }
 });
