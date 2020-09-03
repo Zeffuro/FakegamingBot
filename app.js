@@ -38,9 +38,17 @@ const rl = Readline.createInterface({
     terminal: true
 });
 
-rl.on("line", function(line){
+rl.on("line", async function(line){
     if(line === "scan"){
-        albion.scanRecentEvents(Database, client);
+        if(!scanCurrentlyRunning){
+            scanCurrentlyRunning = true;
+            try {
+                await albion.scanRecentEvents(Database, client);
+            } catch (error) {
+                logger.info("Something went wrong with Albion Events skin.");
+            }
+            scanCurrentlyRunning = false;
+        }
     }
 });
 
