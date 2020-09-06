@@ -7,6 +7,7 @@ module.exports = (sequelize, type) => {
         },
         serverId: type.STRING,
         entityId: type.STRING,
+        trackType: type.INTEGER,
         channelId: type.STRING
     });
 };

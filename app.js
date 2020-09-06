@@ -8,6 +8,7 @@ const { token, defaultCooldown } = require("./config.json");
 const albion = require("./helpers/albion");
 
 var scanCurrentlyRunning = false;
+var battleScanCurrentlyRunning = false;
 
 const client = new Discord.Client();
 client.commands = new Discord.Collection();
@@ -45,9 +46,20 @@ rl.on("line", async function(line){
             try {
                 await albion.scanRecentEvents(Database, client);
             } catch (error) {
-                logger.info("Something went wrong with Albion Events skin.");
+                logger.error("Something went wrong with Albion Events scan.");
             }
             scanCurrentlyRunning = false;
+        }
+    }
+    if(line === "scanbattle"){
+        if(!battleScanCurrentlyRunning){
+            battleScanCurrentlyRunning = true;
+            try {
+                await albion.scanRecentBattles(Database, client);
+            } catch (error) {
+                logger.error("Something went wrong with Albion Battles scan.");
+            }
+            battleScanCurrentlyRunning = false;
         }
     }
 });
@@ -60,9 +72,20 @@ client.once("ready", () => {
             try {
                 await albion.scanRecentEvents(Database, client);
             } catch (error) {
-                logger.info("Something went wrong with Albion Events skin.");
+                logger.error("Something went wrong with Albion Events scan.");
             }
             scanCurrentlyRunning = false;
+        }
+    });
+    Cron.schedule("*/1 * * * *", async () => {
+        if(!battleScanCurrentlyRunning){
+            battleScanCurrentlyRunning = true;
+            try {
+                await albion.scanRecentBattles(Database, client);
+            } catch (error) {
+                logger.error("Something went wrong with Albion Events scan.");
+            }
+            battleScanCurrentlyRunning = false;
         }
     });
 });

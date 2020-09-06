@@ -9,7 +9,7 @@ module.exports = {
     guildOnly: false,
     adminOnly: true,
     args: true,
-    usage: "<type> <name>",
+    usage: "<entitytype> <tracktype> <name>",
     async execute(message, args, database) {
         await albion.handleTrackCommand(message, args, database);
     },

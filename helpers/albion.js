@@ -20,11 +20,109 @@ const logger = createLogger({
 
 module.exports = {
     handleBuildCommand: handleBuildCommand,
+    handleBattleCommand: handleBattleCommand,
     handleEventCommand: handleEventCommand,
     handleKillDeathCommand: handleKillDeathCommand,
     handleTrackCommand: handleTrackCommand,
-    scanRecentEvents: scanRecentEvents
+    scanRecentEvents: scanRecentEvents,
+    scanRecentBattles: scanRecentBattles
 };
+
+async function createBattleImage (battle){
+    const width = 800;
+    let height = 300;
+    
+    let mainParticipants = getBattleParticipants(battle);
+
+    if(mainParticipants.length < 5){
+        height += mainParticipants.length * 30;
+    }else{
+        height += (5 * 30);
+    }    
+
+    registerFont("fonts/sansation_regular.ttf", { family: "Sansation" });
+    registerFont("fonts/sansation_bold.ttf", { family: "Sansation Bold" });
+
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+
+    context.imageSmoothingQuality = "high";
+    context.font = "24px \"Sansation Bold\"";
+
+    context.fillStyle = "#2f3136";
+    context.fillRect(0, 0, width, height);
+
+    context.fillStyle = "#fff";
+    context.textAlign = "center";
+
+    let participantsTitle = `${mainParticipants[0].name} (${mainParticipants[0].players}) vs ${mainParticipants[1].name} (${mainParticipants[1].players})`;
+    if(mainParticipants.length > 2){
+        participantsTitle = `${mainParticipants[0].name} (${mainParticipants[0].players}) vs ${mainParticipants[1].name} (${mainParticipants[1].players}) vs ${mainParticipants[2].name} (${mainParticipants[2].players})`;
+    }
+
+    let currentY = 40;
+    context.font = "30px \"Sansation Bold\"";
+    context.fillText(participantsTitle, width / 2, currentY);
+
+    currentY += 40;
+    context.fillText(moment.utc(battle.startTime).format("DD-MM-YYYY HH:mm:ss"), width / 2, currentY);
+
+    const factionX = 125;
+    const playersX = 250;
+    const killsX = 375;
+    const deathsX = 500;
+    const killFameX = 625;
+
+    currentY += 50;
+    context.font = "24px \"Sansation Bold\"";
+    context.fillStyle = "#a6a6a6";
+    context.fillText("FACTION", factionX, currentY);
+    context.fillText("PLAYERS", playersX, currentY);
+    context.fillText("KILLS", killsX, currentY);
+    context.fillText("DEATHS", deathsX, currentY);
+    context.fillText("KILLFAME", killFameX, currentY);
+
+    currentY += 30;
+    let i = 0;
+
+    for (let participant of mainParticipants.slice(0, 5)) {
+        if(i === 0){
+            context.fillStyle = "#88ff00";
+        }else if(i === 1){
+            context.fillStyle = "#ff4e4e";
+        }else{
+            context.fillStyle = "#fff";
+        }
+        context.fillText(participant.name, factionX, currentY);
+        context.fillText(participant.players, playersX, currentY);
+        context.fillText(participant.kills, killsX, currentY);
+        context.fillText(participant.deaths, deathsX, currentY);
+        context.fillText(participant.killFame.toLocaleString(), killFameX, currentY);
+        currentY += 25;
+        i++;
+    }
+
+    currentY += 30;
+    context.font = "30px \"Sansation Bold\"";
+    context.fillText(`A total of ${battle.totalKills} players slaughtered`, width / 2, currentY);
+    currentY += 30;
+    let duration = moment.duration(moment(battle.endTime).diff(battle.startTime));
+    context.fillText(`in a battle that took ${duration.minutes()} minutes and ${duration.seconds()} seconds`, width / 2, currentY);
+    currentY += 30;
+    context.fillText("for the total killfame of", width / 2, currentY);
+    currentY += 30;
+
+    let fameString = battle.totalFame.toLocaleString();
+    let fameWidth = context.measureText(fameString);
+    let fameIconLocationX = ((width / 2) - Math.floor((fameWidth.width) / 2)) - 40;
+    let fameIconLocationY = currentY;
+    let fameImage = await loadImage("images/FAME.png");
+
+    context.drawImage(fameImage, fameIconLocationX, fameIconLocationY - 28, 35, 35);
+    context.fillText(fameString, 400, fameIconLocationY);
+
+    return canvas.toBuffer("image/png", { compressionLevel: 1, filters: canvas.PNG_FILTER_NONE });
+}
 
 async function createFightImage (battle){
     const width = 800;
@@ -197,6 +295,27 @@ async function createMiniFightCollection (eventData){
     }
 
     return canvas.toBuffer("image/png", { compressionLevel: 1, filters: canvas.PNG_FILTER_NONE });
+}
+
+async function createBattleEmbed (battle) {
+    let image = await createBattleImage(battle);
+
+    let mainParticipants = getBattleParticipants(battle);
+
+    let participantsTitle = `${mainParticipants[0].name} (${mainParticipants[0].players}) vs ${mainParticipants[1].name} (${mainParticipants[1].players})`;
+    if(mainParticipants.length > 2){
+        participantsTitle = `${mainParticipants[0].name} (${mainParticipants[0].players}) vs ${mainParticipants[1].name} (${mainParticipants[1].players}) vs ${mainParticipants[2].name} (${mainParticipants[2].players})`;
+    }
+
+    let mainAttach = new Discord.MessageAttachment(image, "main.png");
+    let embed = new Discord.MessageEmbed()
+        .setTitle(participantsTitle)
+        .attachFiles(mainAttach)
+        .setImage("attachment://main.png")
+        .setURL(`https://handholdreport.com/killboard/${battle.id}`)
+        .setFooter("Contact me on Discord (Zeffuro#3033) for any questions.");
+
+    return embed;
 }
 
 async function createEmbed (battle) {
@@ -471,6 +590,42 @@ async function createEstimatedPricesImage(itemList, context, x, y) {
     }
 }
 
+function getBattleParticipants(battle){
+    let factions = [];
+    for (let player of Object.values(battle.players)) {
+        let factionName;
+        let factionType;
+        if(player.allianceName){
+            factionName = player.allianceName;
+            factionType = "Alliance";
+        }else if(player.guildName){
+            factionName = player.guildName;
+            factionType = "Guild";
+        }else{
+            factionName = player.name;
+            factionType = "Player";
+        }
+        if(!factions.find(x => x.name == factionName)){
+            factions.push({
+                name: factionName,
+                type: factionType,
+                kills: 0,
+                deaths: 0,
+                killFame: 0,
+                players: 0
+            });
+        }
+        let factionIndex = factions.findIndex(x => x.name == factionName);
+        factions[factionIndex].kills += player.kills;
+        factions[factionIndex].deaths += player.deaths;
+        factions[factionIndex].killFame += player.killFame;
+        factions[factionIndex].players++;
+
+    }
+    factions.sort((a, b) => b.killFame - a.killFame);
+    return factions;
+}
+
 function getUsefulPlayerActions(battle) {
     let usefulPlayerActions = [];
 
@@ -516,6 +671,14 @@ async function getPlayerKills (player){
 async function getPlayerDeaths (player){
     try{
         return await Promise.resolve(albion.deaths(player.id));
+    }catch(err){
+        logger.error(err);
+    }
+}
+
+async function getBattleData (battleId){
+    try{
+        return await Promise.resolve(albion.battle(battleId));
     }catch(err){
         logger.error(err);
     }
@@ -590,6 +753,18 @@ async function handleBuildCommand(message, args, database) {
 
 }
 
+async function handleBattleCommand(message, args) {
+    let loadingMessage = await message.channel.send("Retrieving data from Albion Online API, sometimes this can take a very long time.");
+    let battleId = args[0];
+    let battle = await getBattleData(battleId);
+
+    if(battle.length === 0){
+        return loadingMessage.edit(`No results found for ${battleId}`);
+    }
+
+    handleBattleData(battle, message.channel, loadingMessage);
+}
+
 async function handleEventCommand(message, args) {
     let loadingMessage = await message.channel.send("Retrieving data from Albion Online API, sometimes this can take a very long time.");
     let eventId = args[0];
@@ -600,6 +775,16 @@ async function handleEventCommand(message, args) {
     }
 
     handleEventData(event, message.channel, loadingMessage);
+}
+
+async function handleBattleData(battleData, channel, loadingMessage){
+    let embed = await createBattleEmbed(battleData);
+
+    if(loadingMessage){
+        loadingMessage.delete();
+    }
+
+    channel.send(embed);
 }
 
 async function handleEventData(eventData, channel, loadingMessage, mini = false){
@@ -695,9 +880,22 @@ async function handleTrackCommand(message, args, database, remove = false){
         type = 1;
         break;
     default:
-        return message.channel.send("No valid type provided, valid types are: player, guild.");
+        return message.channel.send("No valid entitytype provided, valid entitytypes are: player, guild.");
     }
-    let entity = args.slice(1).join(" ");
+
+    let trackType;
+    switch(args[1]){
+    case "events":
+        trackType = 0;
+        break;
+    case "battles":
+        trackType = 1;
+        break;
+    default:
+        return message.channel.send("No valid tracktype provided, valid tracktypes are: events, battles.");
+    }
+
+    let entity = args.slice(2).join(" ");
     let entityInfo;
 
     entityInfo = await getEntityInfo(entity, type, database);
@@ -708,7 +906,8 @@ async function handleTrackCommand(message, args, database, remove = false){
     let trackEntry = await database.Albion.ServerTrack.findAll({
         where: {
             serverId: await message.guild.id,
-            entityId: entityInfo.id
+            entityId: entityInfo.id,
+            trackType: trackType
         },
         raw: true
     });
@@ -724,24 +923,29 @@ async function handleTrackCommand(message, args, database, remove = false){
         await database.Albion.ServerTrack.create({
             serverId: await message.guild.id,
             entityId: entityInfo.id,
-            channelId: message.channel.id
+            channelId: message.channel.id,
+            trackType: trackType
         });
     }else{
         await database.Albion.ServerTrack.destroy({
             where: {
                 serverId: await message.guild.id,
-                entityId: entityInfo.id
+                entityId: entityInfo.id,
+                trackType: trackType
             }
         });
     }
 
-    return message.channel.send(`Tracking for ${args[0]} ${entity} now ${remove ? "removed" : "added"}!`);
+    return message.channel.send(`Tracking for ${args[0]} ${entity} for ${args[1]} now ${remove ? "removed" : "added"}!`);
 }
 
 async function scanRecentEvents (database, client){
     logger.info("Running scheduled scan of Albion events.");
 
     let trackEntries = await database.Albion.ServerTrack.findAll({
+        where: { 
+            trackType: 0
+        },
         include: [{model: database.Albion.Entity}],
         raw: true
     });
@@ -809,7 +1013,85 @@ async function scanRecentEvents (database, client){
         logger.error(err);
         Promise.reject();
     }
-    logger.info("Scan done.");
+    logger.info("Events scan done.");
+    Promise.resolve();
+}
+
+async function scanRecentBattles (database, client){
+    logger.info("Running scheduled scan of Albion battles.");
+
+    let trackEntries = await database.Albion.ServerTrack.findAll({
+        where: { 
+            trackType: 1
+        },
+        include: [{model: database.Albion.Entity}],
+        raw: true
+    });
+
+    let info = await database.Albion.Static.findOne({
+        where: { 
+            id: 2
+        },
+        raw: true
+    });
+
+    let battles = [];
+    let page = 0;
+    let doOnePage = info.lastEventId === "0";
+    let processNextPage = true;
+    try{
+        do {
+            logger.info(`Getting battles page ${page}`);
+            let newBattles = await albion.battles(page);
+            battles = battles.concat(newBattles);
+            logger.info(`Last eventId on page: ${newBattles[newBattles.length - 1].id} - Last eventId database: ${info.lastEventId}`);
+            page++;
+            if(doOnePage){
+                break;
+            }
+            processNextPage = battles.filter(x => x.id <= info.lastEventId).length === 0 && page !== 20;
+        }
+        while(processNextPage);
+
+        await database.Albion.Static.update(
+            {
+                lastEventId: battles[0].id
+            },
+            {
+                where: {
+                    id: 2
+                }
+            }
+        );
+
+        for (const battle of battles) {
+            if(battle.id <= info.lastEventId){
+                break;
+            }
+            for (const trackEntry of trackEntries) {
+                switch(trackEntry["entity.type"]){
+                case 0:     // Player
+                    if(battle.players[trackEntry.entityId]){
+                        logger.info(`Found battle for ${trackEntry["entity.name"]}.`);
+                        handleBattleData(battle, client.channels.cache.get(trackEntry.channelId));
+                    }
+                    break;
+                case 1:     // Guild
+                    if(battle.guilds[trackEntry.entityId]){
+                        logger.info(`Found battle for ${trackEntry["entity.name"]}.`);
+                        handleBattleData(battle, client.channels.cache.get(trackEntry.channelId));
+                    }
+                    break;
+                default:    // Invalid
+                    break;
+                }
+            }
+        }
+    } catch(err){
+        logger.error(err);
+        Promise.reject();
+    }
+    logger.info("Battle scan done.");
     Promise.resolve();
 }
 
