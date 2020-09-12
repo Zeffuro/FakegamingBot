@@ -21,6 +21,7 @@ const logger = createLogger({
 module.exports = {
     handleBuildCommand: handleBuildCommand,
     handleBattleCommand: handleBattleCommand,
+    handleEntityCommand: handleEntityCommand,
     handleEventCommand: handleEventCommand,
     handleKillDeathCommand: handleKillDeathCommand,
     handleTrackCommand: handleTrackCommand,
@@ -104,6 +105,7 @@ async function createBattleImage (battle){
 
     currentY += 30;
     context.font = "30px \"Sansation Bold\"";
+    context.fillStyle = "#fff";
     context.fillText(`A total of ${battle.totalKills} players slaughtered`, width / 2, currentY);
     currentY += 30;
     let duration = moment.duration(moment(battle.endTime).diff(battle.startTime));
@@ -120,6 +122,141 @@ async function createBattleImage (battle){
 
     context.drawImage(fameImage, fameIconLocationX, fameIconLocationY - 28, 35, 35);
     context.fillText(fameString, 400, fameIconLocationY);
+
+    return canvas.toBuffer("image/png", { compressionLevel: 1, filters: canvas.PNG_FILTER_NONE });
+}
+
+async function createPlayerImage (entityDetails){
+    const width = 800;
+    const height = 400;
+
+    registerFont("fonts/sansation_regular.ttf", { family: "Sansation" });
+    registerFont("fonts/sansation_bold.ttf", { family: "Sansation Bold" });
+
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+
+    context.imageSmoothingQuality = "high";
+    context.font = "24px \"Sansation Bold\"";
+
+    context.fillStyle = "#2f3136";
+    context.fillRect(0, 0, width, height);
+
+    context.fillStyle = "#fff";
+    context.textAlign = "center";
+
+    let currentY = 40;
+    context.font = "30px \"Sansation Bold\"";
+
+    let guildString = entityDetails.AllianceName !== "" ? `[${entityDetails.AllianceName}] ${entityDetails.GuildName}` : entityDetails.GuildName;
+
+    context.fillText(guildString, width / 2, currentY);
+    currentY += 40;
+    context.fillText(entityDetails.Name, width / 2, currentY);
+
+    currentY += 50;
+    context.font = "24px \"Sansation Bold\"";
+    context.textAlign = "left";
+
+    let totalFame = entityDetails.KillFame + 
+    entityDetails.LifetimeStatistics.PvE.Total + 
+    entityDetails.LifetimeStatistics.Gathering.All.Total + 
+    entityDetails.LifetimeStatistics.Crafting.Total +
+    entityDetails.LifetimeStatistics.CrystalLeague;
+
+    context.fillText(`Total: ${totalFame.toLocaleString()}`, 20, 120);
+    context.fillText(`PVP: ${entityDetails.KillFame.toLocaleString()}`, 20, 150);
+    context.fillText(`PVE: ${entityDetails.LifetimeStatistics.PvE.Total.toLocaleString()}`, 20, 180);
+    context.fillText(`Gathering: ${entityDetails.LifetimeStatistics.Gathering.All.Total.toLocaleString()}`, 20, 210);
+    context.fillText(`Crafting: ${entityDetails.LifetimeStatistics.Crafting.Total.toLocaleString()}`, 20, 240);
+    context.fillText(`Crystal League: ${entityDetails.LifetimeStatistics.CrystalLeague.toLocaleString()}`, 20, 270);
+    context.fillText(`DeathFame: ${entityDetails.DeathFame.toLocaleString()}`, 20, 300);
+    context.fillText(`FameRatio: ${entityDetails.FameRatio}`, 20, 330);
+
+    context.fillText("PVE Fame Breakdown", 420, 120);
+    context.fillText(`Royal Zones: ${entityDetails.LifetimeStatistics.PvE.Royal.toLocaleString()}`, 420, 150);
+    context.fillText(`Outland Zones: ${entityDetails.LifetimeStatistics.PvE.Outlands.toLocaleString()}`, 420, 180);
+    context.fillText(`Roads of Avalon: ${entityDetails.LifetimeStatistics.PvE.Avalon.toLocaleString()}`, 420, 210);
+    context.fillText(`Hellgates: ${entityDetails.LifetimeStatistics.PvE.Hellgate.toLocaleString()}`, 420, 240);
+    context.fillText(`Corrupted Dungeons: ${entityDetails.LifetimeStatistics.PvE.CorruptedDungeon.toLocaleString()}`, 420, 270);
+
+    /*
+    let fameString = battle.totalFame.toLocaleString();
+    let fameWidth = context.measureText(fameString);
+    let fameIconLocationX = ((width / 2) - Math.floor((fameWidth.width) / 2)) - 40;
+    let fameIconLocationY = currentY;
+    let fameImage = await loadImage("images/FAME.png");
+
+    context.drawImage(fameImage, fameIconLocationX, fameIconLocationY - 28, 35, 35);
+    context.fillText(fameString, 400, fameIconLocationY);
+    */
+
+    return canvas.toBuffer("image/png", { compressionLevel: 1, filters: canvas.PNG_FILTER_NONE });
+}
+
+async function createGuildImage (entityDetails){
+    const width = 800;
+    const height = 400;
+
+    registerFont("fonts/sansation_regular.ttf", { family: "Sansation" });
+    registerFont("fonts/sansation_bold.ttf", { family: "Sansation Bold" });
+
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+
+    context.imageSmoothingQuality = "high";
+    context.font = "24px \"Sansation Bold\"";
+
+    context.fillStyle = "#2f3136";
+    context.fillRect(0, 0, width, height);
+
+    context.fillStyle = "#fff";
+    context.textAlign = "center";
+
+    let currentY = 40;
+    context.font = "30px \"Sansation Bold\"";
+
+    let guildString = entityDetails.AllianceName !== "" ? `[${entityDetails.AllianceName}] ${entityDetails.GuildName}` : entityDetails.GuildName;
+
+    context.fillText(guildString, width / 2, currentY);
+    currentY += 40;
+    context.fillText(entityDetails.Name, width / 2, currentY);
+
+    currentY += 50;
+    context.font = "24px \"Sansation Bold\"";
+
+    let totalFame = entityDetails.KillFame + 
+    entityDetails.LifetimeStatistics.PvE.Total + 
+    entityDetails.LifetimeStatistics.Gathering.All.Total + 
+    entityDetails.LifetimeStatistics.Crafting.Total +
+    entityDetails.LifetimeStatistics.CrystalLeague;
+
+    context.fillText(`Total: ${totalFame.toLocaleString()}`, 100, 120);
+    context.fillText(`PVP: ${entityDetails.KillFame.toLocaleString()}`, 100, 150);
+    context.fillText(`PVE: ${entityDetails.LifetimeStatistics.PvE.Total.toLocaleString()}`, 100, 180);
+    context.fillText(`Gathering: ${entityDetails.LifetimeStatistics.Gathering.All.Total.toLocaleString()}`, 100, 210);
+    context.fillText(`Crafting: ${entityDetails.LifetimeStatistics.Crafting.Total.toLocaleString()}`, 100, 240);
+    context.fillText(`Crystal League: ${entityDetails.LifetimeStatistics.CrystalLeague.toLocaleString()}`, 100, 270);
+    context.fillText(`DeathFame: ${entityDetails.DeathFame.toLocaleString()}`, 100, 300);
+    context.fillText(`FameRatio: ${entityDetails.FameRatio}`, 100, 330);
+
+    context.fillText("PVE Fame Breakdown", 500, 120);
+    context.fillText(`Royal Zones: ${entityDetails.LifetimeStatistics.PvE.Royal.toLocaleString()}`, 500, 150);
+    context.fillText(`Outland Zones: ${entityDetails.LifetimeStatistics.PvE.Outlands.toLocaleString()}`, 500, 180);
+    context.fillText(`Roads of Avalon: ${entityDetails.LifetimeStatistics.PvE.Avalon.toLocaleString()}`, 500, 210);
+    context.fillText(`Hellgates: ${entityDetails.LifetimeStatistics.PvE.Hellgate.toLocaleString()}`, 500, 240);
+    context.fillText(`Corrupted Dungeons: ${entityDetails.LifetimeStatistics.PvE.CorruptedDungeon.toLocaleString()}`, 500, 270);
+
+    /*
+    let fameString = battle.totalFame.toLocaleString();
+    let fameWidth = context.measureText(fameString);
+    let fameIconLocationX = ((width / 2) - Math.floor((fameWidth.width) / 2)) - 40;
+    let fameIconLocationY = currentY;
+    let fameImage = await loadImage("images/FAME.png");
+
+    context.drawImage(fameImage, fameIconLocationX, fameIconLocationY - 28, 35, 35);
+    context.fillText(fameString, 400, fameIconLocationY);
+    */
 
     return canvas.toBuffer("image/png", { compressionLevel: 1, filters: canvas.PNG_FILTER_NONE });
 }
@@ -316,6 +453,30 @@ async function createBattleEmbed (battle) {
         .setFooter("Contact me on Discord (Zeffuro#3033) for any questions.");
 
     return embed;
+}
+
+async function createEntityEmbed (entityDetails, type) {
+    let image;
+    switch(type){
+    case 0:
+        image = await createPlayerImage(entityDetails);
+        break;
+    case 1:
+        image = await createGuildImage(entityDetails);
+        break;
+    default:
+        break;
+    }
+ 
+    let mainAttach = new Discord.MessageAttachment(image, "main.png");
+    let mainEmbed = new Discord.MessageEmbed()
+        .setTitle(`Profile for ${entityDetails.Name}`)
+        .attachFiles(mainAttach)
+        .setImage("attachment://main.png")
+        .setURL(`https://albiononline.com/en/killboard/${type == 0 ? "player" : "guild"}/${entityDetails.Id}`)
+        .setFooter("Contact me on Discord (Zeffuro#3033) for any questions.");
+
+    return mainEmbed;
 }
 
 async function createEmbed (battle) {
@@ -743,7 +904,11 @@ async function getEntityInfo (name, type, database){
 async function getOrSaveItemImage(item){
     let imageItemPath = `images/items/${item.Type}-${item.Quality}.png`;
     if(!fs.existsSync(imageItemPath)){
-        await downloadImage(`https://render.albiononline.com/v1/item/${item.Type}.png?quality=${item.Quality}`, imageItemPath);
+        try{
+            await downloadImage(`https://render.albiononline.com/v1/item/${item.Type}.png?quality=${item.Quality}`, imageItemPath);
+        } catch (err){
+            logger.error(err);
+        }    
     }
 
     return imageItemPath;
@@ -787,6 +952,39 @@ async function handleBattleData(battleData, channel, loadingMessage){
     channel.send(embed);
 }
 
+async function handleEntityCommand(command, message, args, database) {
+    let loadingMessage = await message.channel.send("Retrieving data from Albion Online API, sometimes this can take a very long time.");
+    let entityInfo;
+    let entityDetails;
+
+    switch(command){
+    case "player":
+        entityInfo = await getEntityInfo(args[0], 0, database);
+        if(!entityInfo) return loadingMessage.edit("Player not found...");
+        entityDetails = await albion.player(entityInfo.id);
+        handleEntityData(entityDetails, 0, message.channel, loadingMessage);
+        break;
+    case "guild":
+        entityInfo = await getEntityInfo(args[0], 1, database);
+        if(!entityInfo) return loadingMessage.edit("Guild not found...");
+        entityDetails = await albion.guild(entityInfo.id);
+        handleEntityData(entityDetails, 1, message.channel, loadingMessage);
+        break;
+    default:
+        break;
+    }
+}
+
+async function handleEntityData(entityDetails, type, channel, loadingMessage){
+    let embed = await createEntityEmbed(entityDetails, type);
+
+    if(loadingMessage){
+        loadingMessage.delete();
+    }
+
+    channel.send(embed);
+}
+
 async function handleEventData(eventData, channel, loadingMessage, mini = false){
     let embed;
     if(mini){
@@ -810,7 +1008,8 @@ async function handlePlayerArguments(command, loadingMessage, message, args, dat
     let playerInfo;
 
     if(args.length === 0){
-        playerInfo = await getEntityInfo(message.author.username, 0, database);
+        let nickname = message.member ? message.member.displayName : message.author.username;
+        playerInfo = await getEntityInfo(nickname, 0, database);
         if(!playerInfo) return loadingMessage.edit(`Player not found, please use \`!${command} <name>\` or change your username to your charactername. ${message.author}`);
     }
 
