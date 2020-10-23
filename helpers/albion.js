@@ -1139,7 +1139,7 @@ async function handleTrackCommand(message, args, database, remove = false){
 }
 
 async function scanRecentEvents (database, client){
-    logger.info("Running scheduled scan of Albion events.");
+    logger.info("[Events] Starting scheduled scan.");
 
     let trackEntries = await database.Albion.ServerTrack.findAll({
         where: { 
@@ -1162,10 +1162,10 @@ async function scanRecentEvents (database, client){
     let processNextPage = true;
     try{
         do {
-            logger.info(`Getting events page ${page}`);
+            logger.info(`[Events] Getting page ${page + 1}`);
             let newEvents = await albion.events(page);
             events = events.concat(newEvents);
-            logger.info(`Last eventId on page: ${newEvents[newEvents.length - 1].EventId} - Last eventId database: ${info.lastEventId}`);
+            logger.info(`[Events] First ID Page: ${newEvents[0].EventId} - Last ID Page: ${newEvents[newEvents.length - 1].EventId} - Last ID DB: ${info.lastEventId}`);
             page++;
             if(doOnePage){
                 break;
@@ -1174,6 +1174,7 @@ async function scanRecentEvents (database, client){
         }
         while(processNextPage);
 
+        logger.info(`[Events] Updating ID in DB: ${events[0].EventId}`);
         await database.Albion.Static.update(
             {
                 lastEventId: events[0].EventId
@@ -1193,13 +1194,13 @@ async function scanRecentEvents (database, client){
                 switch(trackEntry["entity.type"]){
                 case 0:     // Player
                     if((event.Killer.Id == trackEntry.entityId) || (event.Victim.Id == trackEntry.entityId)){
-                        logger.info(`Found event for ${trackEntry["entity.name"]}.`);
+                        logger.info(`[Events] Found event for ${trackEntry["entity.name"]}.`);
                         handleEventData(event, client.channels.cache.get(trackEntry.channelId));
                     }
                     break;
                 case 1:     // Guild
                     if((event.Killer.GuildId == trackEntry.entityId) || (event.Victim.GuildId == trackEntry.entityId)){
-                        logger.info(`Found event for ${trackEntry["entity.name"]}.`);
+                        logger.info(`[Events] Found event for ${trackEntry["entity.name"]}.`);
                         handleEventData(event, client.channels.cache.get(trackEntry.channelId));
                     }
                     break;
@@ -1212,12 +1213,12 @@ async function scanRecentEvents (database, client){
         logger.error(err);
         Promise.reject();
     }
-    logger.info("Events scan done.");
+    logger.info("[Events] Scan done.");
     Promise.resolve();
 }
 
 async function scanRecentBattles (database, client){
-    logger.info("Running scheduled scan of Albion battles.");
+    logger.info("[Battles] Starting scheduled scan.");
 
     let trackEntries = await database.Albion.ServerTrack.findAll({
         where: { 
@@ -1240,10 +1241,10 @@ async function scanRecentBattles (database, client){
     let processNextPage = true;
     try{
         do {
-            logger.info(`Getting battles page ${page}`);
+            logger.info(`[Battles] Getting page ${page + 1}`);
             let newBattles = await albion.battles(page);
             battles = battles.concat(newBattles);
-            logger.info(`Last eventId on page: ${newBattles[newBattles.length - 1].id} - Last eventId database: ${info.lastEventId}`);
+            logger.info(`[Battles] First ID Page: ${newBattles[0].id} - Last ID Page: ${newBattles[newBattles.length - 1].id} - Last ID DB: ${info.lastEventId}`);
             page++;
             if(doOnePage){
                 break;
@@ -1271,13 +1272,13 @@ async function scanRecentBattles (database, client){
                 switch(trackEntry["entity.type"]){
                 case 0:     // Player
                     if(battle.players[trackEntry.entityId]){
-                        logger.info(`Found battle for ${trackEntry["entity.name"]}.`);
+                        logger.info(`[Battles] Found battle for ${trackEntry["entity.name"]}.`);
                         handleBattleData(battle, client.channels.cache.get(trackEntry.channelId));
                     }
                     break;
                 case 1:     // Guild
                     if(battle.guilds[trackEntry.entityId]){
-                        logger.info(`Found battle for ${trackEntry["entity.name"]}.`);
+                        logger.info(`[Battles] Found battle for ${trackEntry["entity.name"]}.`);
                         handleBattleData(battle, client.channels.cache.get(trackEntry.channelId));
                     }
                     break;
@@ -1290,7 +1291,7 @@ async function scanRecentBattles (database, client){
         logger.error(err);
         Promise.reject();
     }
-    logger.info("Battle scan done.");
+    logger.info("[Battles] Scan done.");
     Promise.resolve();
 }
 
