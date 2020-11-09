@@ -372,26 +372,28 @@ async function createMiniFight (battle){
 
     context.fillStyle = "#ff4e4e";
     context.textAlign = "right";
-    context.fillText(Math.floor(battle.Killer.AverageItemPower), 350, 75);
+    context.fillText(Math.floor(battle.Killer.AverageItemPower), 350, 60);
     context.textAlign = "left";
-    context.fillText(Math.floor(battle.Victim.AverageItemPower), 450, 75);
+    context.fillText(Math.floor(battle.Victim.AverageItemPower), 450, 60);
 
     let powerDifference = battle.Killer.AverageItemPower - battle.Victim.AverageItemPower;
     
     context.fillStyle = Math.sign(powerDifference) <= 0 ? "#ffff00" : "#88ff00";
     context.textAlign = "center";
-    context.fillText(`${Math.sign(powerDifference) <= 0 ? "" : "+"}${Math.floor(powerDifference)}`, 400, 75);
+    context.fillText(`${Math.sign(powerDifference) <= 0 ? "" : "+"}${Math.floor(powerDifference)}`, 400, 60);
 
     context.fillStyle = "#fff";
 
     let fameString = battle.TotalVictimKillFame.toLocaleString();
     let fameWidth = context.measureText(fameString);
     let fameIconLocationX = (400 - Math.floor((fameWidth.width) / 2)) - 24;
-    let fameIconLocationY = 40;
+    let fameIconLocationY = 30;
     let fameImage = await loadImage("images/FAME.png");
 
     context.drawImage(fameImage, fameIconLocationX, fameIconLocationY - 16, 20, 20);
     context.fillText(fameString, 400, fameIconLocationY);
+
+    context.fillText(moment(battle.TimeStamp).format("DD-MM-YYYY HH:mm:ss"), 400, 85);
 
     return canvas.toBuffer();
 }
