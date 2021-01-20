@@ -1,4 +1,4 @@
-const albion = require("node-albion-api");
+const albion = require("albion-api-zeff");
 const axios = require("axios");
 const { registerFont, createCanvas, loadImage, Image } = require("canvas");
 const { transports, format, createLogger } = require("winston");
@@ -1193,17 +1193,22 @@ async function scanRecentEvents (database, client){
                 break;
             }
             for (const trackEntry of trackEntries) {
+                let channel = client.channels.cache.get(trackEntry.channelId);
+                if(channel === undefined){
+                    logger.error(`[Events] Channel ID for ${trackEntry["entity.name"]} for Server ID ${trackEntry.serverId} seems to be invalid.`);
+                    return;
+                }
                 switch(trackEntry["entity.type"]){
                 case 0:     // Player
                     if((event.Killer.Id == trackEntry.entityId) || (event.Victim.Id == trackEntry.entityId)){
                         logger.info(`[Events] Found event for ${trackEntry["entity.name"]}.`);
-                        handleEventData(event, client.channels.cache.get(trackEntry.channelId));
+                        handleEventData(event, channel);
                     }
                     break;
                 case 1:     // Guild
                     if((event.Killer.GuildId == trackEntry.entityId) || (event.Victim.GuildId == trackEntry.entityId)){
                         logger.info(`[Events] Found event for ${trackEntry["entity.name"]}.`);
-                        handleEventData(event, client.channels.cache.get(trackEntry.channelId));
+                        handleEventData(event, channel);
                     }
                     break;
                 default:    // Invalid

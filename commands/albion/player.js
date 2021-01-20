@@ -13,4 +13,4 @@ module.exports = {
     async execute(message, args, database) {
         await albion.handleEntityCommand(this.name, message, args, database);
     },
-}; 
+};

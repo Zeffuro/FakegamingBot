@@ -66,6 +66,9 @@ rl.on("line", async function(line){
 
 client.once("ready", () => {
     logger.info("Ready!");
+    client.guilds.cache.forEach((guild) => {
+        logger.info(guild.name);
+    });
     Cron.schedule("*/1 * * * *", async () => {
         if(!scanCurrentlyRunning){
             scanCurrentlyRunning = true;

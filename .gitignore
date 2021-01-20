@@ -1,7 +1,10 @@
 config.json
 images/items
-node_modules/*
-!node_modules/node-albion-api
+node_modules/
 database.sqlite
 
 .vscode/
+
+images/items.7z
+
+DiscordBot.zip
